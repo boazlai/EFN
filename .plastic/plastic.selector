@@ -1,0 +1,4 @@
+repository "EFN@tj_boazlai@cloud.cn"
+  path "/"
+    br "/main"
+    co "/main"

@@ -1,0 +1,70 @@
+using UnityEngine;
+using TMPro;
+
+public class DoorInteraction : MonoBehaviour
+{
+    [Header("Interaction Settings")]
+    [SerializeField] private float interactRange = 3f;
+    [SerializeField] private LayerMask doorLayer;
+
+    [Header("UI (Optional)")]
+    [SerializeField] private TextMeshProUGUI promptText;   // assign a TextMeshPro - Text (UI) in the Inspector, or leave empty
+
+    private Camera _cam;
+
+    private void Start()
+    {
+        _cam = Camera.main;
+
+        if (promptText != null)
+            promptText.gameObject.SetActive(false);
+    }
+
+    private void Update()
+    {
+        Door door = GetDoorInSight();
+
+        // Show / hide prompt
+        if (promptText != null)
+        {
+            bool show = door != null;
+            if (promptText.gameObject.activeSelf != show)
+                promptText.gameObject.SetActive(show);
+
+            if (show)
+                promptText.text = door.GetPrompt();
+        }
+
+        // Interact on E
+        if (door != null && Input.GetKeyDown(KeyCode.E))
+            door.Interact();
+    }
+
+    private Door GetDoorInSight()
+    {
+        Ray ray = new Ray(_cam.transform.position, _cam.transform.forward);
+
+        // If doorLayer is not configured (value 0 = Nothing), fall back to all layers
+        LayerMask mask = doorLayer.value == 0 ? Physics.DefaultRaycastLayers : doorLayer;
+
+        if (Physics.Raycast(ray, out RaycastHit hit, interactRange, mask, QueryTriggerInteraction.Ignore))
+        {
+            Door found = hit.collider.GetComponentInParent<Door>();
+            // Skip doors that use the unlock minigame — that script handles them
+            if (found != null && found.GetComponent<DoorUnlockMinigame>() != null)
+                return null;
+            return found;
+        }
+
+        return null;
+    }
+
+#if UNITY_EDITOR
+    private void OnDrawGizmosSelected()
+    {
+        if (_cam == null) return;
+        Gizmos.color = Color.yellow;
+        Gizmos.DrawRay(_cam.transform.position, _cam.transform.forward * interactRange);
+    }
+#endif
+}
