@@ -51,6 +51,9 @@ MonoBehaviour:
   closePrompt: Press [E] to close
   isLocked: 0
   lockedPrompt: Door is locked
+  shakeAngle: 1
+  shakeSpeed: 20
+  shakeCount: 5
   openSound: {fileID: 8300000, guid: 2d3a11c743a853243a6fd371b37232d9, type: 3}
   closeSound: {fileID: 8300000, guid: 39ec4954564c3e54d8d3855a10182a04, type: 3}
   lockedSound: {fileID: 8300000, guid: 075701a4cb0992242ba6dd8d3d9512e4, type: 3}

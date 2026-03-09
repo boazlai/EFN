@@ -50,8 +50,9 @@ public class DoorInteraction : MonoBehaviour
         if (Physics.Raycast(ray, out RaycastHit hit, interactRange, mask, QueryTriggerInteraction.Ignore))
         {
             Door found = hit.collider.GetComponentInParent<Door>();
-            // Skip doors that use the unlock minigame — that script handles them
-            if (found != null && found.GetComponent<DoorUnlockMinigame>() != null)
+            // Skip doors whose unlock minigame is still in progress — that script handles them
+            var minigame = found != null ? found.GetComponent<DoorUnlockMinigame>() : null;
+            if (minigame != null && !minigame.IsCompleted)
                 return null;
             return found;
         }

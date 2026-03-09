@@ -17,6 +17,7 @@ using UnityEngine.UI;
 public class FirstPersonController : MonoBehaviour
 {
     private Rigidbody rb;
+    private Animator _animator;
 
     #region Camera Movement Variables
 
@@ -134,6 +135,7 @@ public class FirstPersonController : MonoBehaviour
     private void Awake()
     {
         rb = GetComponent<Rigidbody>();
+        _animator = GetComponentInChildren<Animator>();
 
         crosshairObject = GetComponentInChildren<Image>();
 
@@ -326,7 +328,7 @@ public class FirstPersonController : MonoBehaviour
         #region Jump
 
         // Gets input and calls jump method
-        if(enableJump && Input.GetKeyDown(jumpKey) && isGrounded)
+        if(enableJump && Input.GetKeyDown(jumpKey) && isGrounded && !DoorUnlockMinigame.IsActive)
         {
             Jump();
         }
@@ -436,6 +438,14 @@ public class FirstPersonController : MonoBehaviour
 
                 rb.AddForce(velocityChange, ForceMode.VelocityChange);
             }
+        }
+
+        // Send horizontal speed to animator
+        if (_animator != null)
+        {
+            Vector3 hVel = rb.velocity;
+            hVel.y = 0f;
+            _animator.SetFloat("Speed", hVel.magnitude);
         }
 
         #endregion

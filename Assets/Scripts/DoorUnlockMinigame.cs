@@ -1,30 +1,26 @@
-using System.Collections;
+﻿using System.Collections;
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
 
-/// <summary>
-/// Attach this to the same DoorHinge GameObject that has the Door component.
-/// Make sure Door's "Is Locked" checkbox is ticked.
-/// DoorInteraction will automatically skip this door and let this script handle it.
-/// </summary>
 public class DoorUnlockMinigame : MonoBehaviour
 {
-    // ── Door ─────────────────────────────────────────────────────────────────
     [Header("Door Reference")]
     [SerializeField] private Door door;
     [SerializeField] private float interactRange = 3f;
 
-    // ── Game Settings ─────────────────────────────────────────────────────────
     [Header("Minigame Settings")]
-    [SerializeField] private int   totalScrews        = 4;
-    [SerializeField] private float unscrewDuration    = 10f;  // seconds to hold E per screw
-    [SerializeField] private float alignTolerance     = 15f;  // degrees of leniency
-    [SerializeField] private float baseSpinSpeed      = 90f;  // deg/sec on first challenge
-    [SerializeField] private float spinSpeedIncrement = 25f;  // added per challenge (gets harder)
-    [SerializeField] private int   totalWires         = 3;
+    [SerializeField] private int   totalScrews           = 4;
+    [SerializeField] private float unscrewDuration       = 10f;
+    [SerializeField] private float alignTolerance        = 15f;
+    [SerializeField] private float baseSpinSpeed         = 90f;
+    [SerializeField] private float spinSpeedIncrement    = 25f;
+    [SerializeField] private int   totalWires            = 3;
+    [SerializeField] private float randomAlignMinTime    = 2f;
+    [SerializeField] private float randomAlignMaxTime    = 6f;
+    [Range(0f, 1f)]
+    [SerializeField] private float alignInterruptChance  = 0.35f; // 0 = never, 1 = always
 
-    // ── Audio ─────────────────────────────────────────────────────────────────
     [Header("Audio")]
     [SerializeField] private AudioClip unscrewLoopClip;
     [SerializeField] private AudioClip dropClip;
@@ -33,41 +29,50 @@ public class DoorUnlockMinigame : MonoBehaviour
     [SerializeField] private AudioClip electricSparkClip;
     private AudioSource _audio;
 
-    // ── UI References ─────────────────────────────────────────────────────────
-    [Header("UI – Root")]
-    [SerializeField] private GameObject minigamePanel;   // the whole overlay
+    [Header("UI - Approach Prompt")]
+    [SerializeField] private TextMeshProUGUI approachPrompt;
 
-    [Header("UI – Screws")]
-    [SerializeField] private Image[] screwIcons;         // 4 Image components
-    [SerializeField] private Image   progressFill;       // fill Image of the progress bar
+    [Header("UI - Root")]
+    [SerializeField] private GameObject minigamePanel;
 
-    [Header("UI – Align Circle")]
+    [Header("UI - Screws")]
+    [SerializeField] private Image[] screwIcons;
+    [SerializeField] private Image   progressFill;
+
+    [Header("UI - Align Circle")]
     [SerializeField] private GameObject       alignPanel;
-    [SerializeField] private RectTransform    needlePivot;      // empty pivot at center, spins
-    [SerializeField] private RectTransform    targetBoxPivot;   // empty pivot at center, random angle
+    [SerializeField] private RectTransform    needlePivot;
+    [SerializeField] private RectTransform    targetBoxPivot;
+    [SerializeField] private Image            targetBoxImage;   // the arc/ring slice image
     [SerializeField] private TextMeshProUGUI  alignHintText;
 
-    [Header("UI – Wires")]
-    [SerializeField] private Image[] wireIcons;          // 3 Image components
+    [Header("UI - Wires")]
+    [SerializeField] private Image[] wireIcons;
 
-    [Header("UI – Status")]
+    [Header("UI - Status")]
     [SerializeField] private TextMeshProUGUI statusText;
 
-    // ── State ─────────────────────────────────────────────────────────────────
     private enum Phase { Idle, Unscrewing, AlignScrew, WireReady, AlignWire, Done }
     private Phase _phase = Phase.Idle;
 
-    private int   _screwsDone    = 0;
-    private int   _wiresDone     = 0;
-    private float _unscrewT      = 0f;
-    private int   _challengeNum  = 0;   // cumulative challenge count (drives speed)
-    private float _targetAngle   = 0f;
-    private bool  _inRange       = false;
+    private int   _screwsDone          = 0;
+    private int   _wiresDone           = 0;
+    private float _unscrewT            = 0f;
+    private int   _challengeNum        = 0;
+    private float _targetAngle         = 0f;
+    private bool  _inRange             = false;
+    private float _nextAlignInterruptT = 0f;
+    private bool  _interruptPending    = false;
+    private bool  _mandatoryAlign      = false;  // true = bar just filled, must pass to advance screw
+
+    // True while the align circle is visible — read by the player controller to suppress jumping
+    public static bool IsActive { get; private set; }
+
+    // True once the minigame has been completed (door unlocked)
+    public bool IsCompleted => _phase == Phase.Done;
 
     private static readonly Color ColDone    = new Color(1f, 1f, 1f, 0.3f);
     private static readonly Color ColPending = Color.white;
-
-    // ─────────────────────────────────────────────────────────────────────────
 
     private void Awake()
     {
@@ -78,15 +83,36 @@ public class DoorUnlockMinigame : MonoBehaviour
 
     private void Start()
     {
-        minigamePanel.SetActive(false);
-        alignPanel.SetActive(false);
+        if (minigamePanel)  minigamePanel.SetActive(false);
+        if (alignPanel)     alignPanel.SetActive(false);
+        if (approachPrompt) approachPrompt.gameObject.SetActive(false);
+
+        // Configure target box as a curved arc slice matching the ring
+        if (targetBoxImage != null)
+        {
+            targetBoxImage.type          = Image.Type.Filled;
+            targetBoxImage.fillMethod    = Image.FillMethod.Radial360;
+            targetBoxImage.fillOrigin    = 2; // 2 = Top for Radial360
+            targetBoxImage.fillClockwise = true;
+            targetBoxImage.fillAmount    = (alignTolerance * 2f) / 360f;
+        }
+
         RefreshScrewIcons();
         RefreshWireIcons();
     }
 
     private void Update()
     {
+        if (_phase == Phase.Done) return;
+
         _inRange = IsPlayerLookingAtDoor();
+
+        if (approachPrompt != null)
+        {
+            bool showApproach = _inRange && _phase == Phase.Idle;
+            if (approachPrompt.gameObject.activeSelf != showApproach)
+                approachPrompt.gameObject.SetActive(showApproach);
+        }
 
         switch (_phase)
         {
@@ -94,16 +120,13 @@ public class DoorUnlockMinigame : MonoBehaviour
                 if (_inRange && Input.GetKeyDown(KeyCode.E))
                     StartUnscrewing();
                 break;
-
             case Phase.Unscrewing:
                 TickUnscrewing();
                 break;
-
             case Phase.AlignScrew:
             case Phase.AlignWire:
                 TickAlign();
                 break;
-
             case Phase.WireReady:
                 if (_inRange && Input.GetKeyDown(KeyCode.E))
                     BeginAlignWire();
@@ -111,14 +134,25 @@ public class DoorUnlockMinigame : MonoBehaviour
         }
     }
 
-    // ── Phase Handlers ────────────────────────────────────────────────────────
-
     private void StartUnscrewing()
     {
         _phase = Phase.Unscrewing;
-        minigamePanel.SetActive(true);
-        alignPanel.SetActive(false);
+        if (minigamePanel) minigamePanel.SetActive(true);
+        if (alignPanel)    alignPanel.SetActive(false);
+        ScheduleAlignInterrupt();
         SetStatus("Hold [E] to unscrew (" + (_screwsDone + 1) + "/" + totalScrews + ")...");
+    }
+
+    private void ScheduleAlignInterrupt()
+    {
+        if (Random.value > alignInterruptChance)
+        {
+            _interruptPending = false;
+            return;
+        }
+        float t = Random.Range(randomAlignMinTime, Mathf.Min(randomAlignMaxTime, unscrewDuration - 0.5f));
+        _nextAlignInterruptT = t / unscrewDuration;
+        _interruptPending    = true;
     }
 
     private void TickUnscrewing()
@@ -132,12 +166,26 @@ public class DoorUnlockMinigame : MonoBehaviour
 
         PlayLoop();
         _unscrewT += Time.deltaTime / unscrewDuration;
-        progressFill.fillAmount = _unscrewT;
+        _unscrewT  = Mathf.Min(_unscrewT, 1f);
+        if (progressFill) progressFill.fillAmount = _unscrewT;
+
+        if (_interruptPending && _unscrewT >= _nextAlignInterruptT)
+        {
+            _interruptPending = false;
+            StopLoop();
+            PrepareAlignCircle("Hold the screwdriver! Press [SPACE]");
+            _phase = Phase.AlignScrew;
+            return;
+        }
 
         if (_unscrewT >= 1f)
         {
             StopLoop();
-            PrepareAlignCircle("Press [SPACE] to lock the screwdriver!");
+            _interruptPending = false;
+            _unscrewT = 1f;
+            // Always trigger a mandatory align at the end of each screw
+            _mandatoryAlign = true;
+            PrepareAlignCircle("Tighten the screw! Press [SPACE]");
             _phase = Phase.AlignScrew;
         }
     }
@@ -152,21 +200,26 @@ public class DoorUnlockMinigame : MonoBehaviour
     {
         _challengeNum++;
         _targetAngle = Random.Range(0f, 360f);
-        needlePivot.localEulerAngles    = Vector3.zero;
-        targetBoxPivot.localEulerAngles = new Vector3(0f, 0f, _targetAngle);
-        alignHintText.text              = hint;
-        alignPanel.SetActive(true);
+        if (needlePivot) needlePivot.localEulerAngles = Vector3.zero;
+
+        // Arc fills clockwise, so pivot must start alignTolerance AHEAD of target
+        // so the arc sweeps through [_targetAngle+tolerance ... _targetAngle-tolerance]
+        if (targetBoxPivot)
+            targetBoxPivot.localEulerAngles = new Vector3(0f, 0f, _targetAngle + alignTolerance);
+
+        if (alignHintText)  alignHintText.text = hint;
+        if (alignPanel)     alignPanel.SetActive(true);
+        IsActive = true;
     }
 
     private void TickAlign()
     {
-        // Spin the needle
         float speed = baseSpinSpeed + spinSpeedIncrement * (_challengeNum - 1);
-        needlePivot.Rotate(0f, 0f, speed * Time.deltaTime);
+        if (needlePivot) needlePivot.Rotate(0f, 0f, speed * Time.deltaTime);
 
         if (!Input.GetKeyDown(KeyCode.Space)) return;
 
-        float needleAngle = needlePivot.localEulerAngles.z;
+        float needleAngle = needlePivot ? needlePivot.localEulerAngles.z : 0f;
         float diff        = Mathf.Abs(Mathf.DeltaAngle(needleAngle, _targetAngle));
         bool  hit         = diff <= alignTolerance;
 
@@ -175,34 +228,50 @@ public class DoorUnlockMinigame : MonoBehaviour
             if (hit)
             {
                 PlayOneShot(alignSuccessClip);
-                alignPanel.SetActive(false);
-                _screwsDone++;
-                _unscrewT = 0f;
-                progressFill.fillAmount = 0f;
-                RefreshScrewIcons();
+                if (alignPanel) alignPanel.SetActive(false);
+                IsActive = false;
 
-                if (_screwsDone >= totalScrews)
-                    EnterWirePhase();
+                if (_mandatoryAlign)
+                {
+                    // Bar was full — advance screw
+                    _mandatoryAlign = false;
+                    _screwsDone++;
+                    _unscrewT = 0f;
+                    if (progressFill) progressFill.fillAmount = 0f;
+                    RefreshScrewIcons();
+
+                    if (_screwsDone >= totalScrews)
+                        EnterWirePhase();
+                    else
+                        StartUnscrewing();
+                }
                 else
-                    StartUnscrewing();
+                {
+                    // Random interrupt — resume filling
+                    ScheduleAlignInterrupt();
+                    _phase = Phase.Unscrewing;
+                    SetStatus("Hold [E] to unscrew (" + (_screwsDone + 1) + "/" + totalScrews + ")...");
+                }
             }
             else
             {
-                // Drop screwdriver — restart current screw
                 PlayOneShot(dropClip);
-                alignPanel.SetActive(false);
+                if (alignPanel) alignPanel.SetActive(false);
+                IsActive = false;
+                _mandatoryAlign = false;
                 _unscrewT = 0f;
-                progressFill.fillAmount = 0f;
+                if (progressFill) progressFill.fillAmount = 0f;
                 _phase = Phase.Idle;
                 SetStatus("Dropped! Hold [E] to try again...");
             }
         }
-        else // AlignWire
+        else
         {
             if (hit)
             {
                 PlayOneShot(wireCutClip);
-                alignPanel.SetActive(false);
+                if (alignPanel) alignPanel.SetActive(false);
+                IsActive = false;
                 _wiresDone++;
                 RefreshWireIcons();
 
@@ -213,11 +282,10 @@ public class DoorUnlockMinigame : MonoBehaviour
             }
             else
             {
-                // Electric spark — reshuffle the target, try same wire again
                 PlayOneShot(electricSparkClip);
                 _targetAngle = Random.Range(0f, 360f);
-                targetBoxPivot.localEulerAngles = new Vector3(0f, 0f, _targetAngle);
-                needlePivot.localEulerAngles    = Vector3.zero;
+                if (targetBoxPivot) targetBoxPivot.localEulerAngles = new Vector3(0f, 0f, _targetAngle + alignTolerance);
+                if (needlePivot)    needlePivot.localEulerAngles    = Vector3.zero;
             }
         }
     }
@@ -225,7 +293,7 @@ public class DoorUnlockMinigame : MonoBehaviour
     private void EnterWirePhase()
     {
         _phase = Phase.WireReady;
-        alignPanel.SetActive(false);
+        if (alignPanel) alignPanel.SetActive(false);
         SetStatus("Press [E] to cut wire " + (_wiresDone + 1) + "/" + totalWires + "...");
     }
 
@@ -233,11 +301,10 @@ public class DoorUnlockMinigame : MonoBehaviour
     {
         _phase = Phase.Done;
         door.SetLocked(false);
+        if (approachPrompt) approachPrompt.gameObject.SetActive(false);
         SetStatus("Door unlocked!");
         StartCoroutine(ClosePanelAfter(1.5f));
     }
-
-    // ── Helpers ───────────────────────────────────────────────────────────────
 
     private bool IsPlayerLookingAtDoor()
     {
@@ -252,8 +319,8 @@ public class DoorUnlockMinigame : MonoBehaviour
     private void ClosePanel()
     {
         _phase = Phase.Idle;
-        minigamePanel.SetActive(false);
-        alignPanel.SetActive(false);
+        if (minigamePanel) minigamePanel.SetActive(false);
+        if (alignPanel)    alignPanel.SetActive(false);
         StopLoop();
     }
 
@@ -301,6 +368,7 @@ public class DoorUnlockMinigame : MonoBehaviour
     private IEnumerator ClosePanelAfter(float delay)
     {
         yield return new WaitForSeconds(delay);
-        ClosePanel();
+        if (minigamePanel) minigamePanel.SetActive(false);
+        if (alignPanel)    alignPanel.SetActive(false);
     }
 }
