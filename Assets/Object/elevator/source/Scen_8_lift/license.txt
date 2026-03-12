@@ -1,0 +1,11 @@
+Model Information:
+* title:	Simple Elevator with Animation
+* source:	https://sketchfab.com/3d-models/simple-elevator-with-animation-770488a2f94a453fb90a7445bda63cd0
+* author:	lhaegy.fu (https://sketchfab.com/lhaegy.fu)
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "Simple Elevator with Animation" (https://sketchfab.com/3d-models/simple-elevator-with-animation-770488a2f94a453fb90a7445bda63cd0) by lhaegy.fu (https://sketchfab.com/lhaegy.fu) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)

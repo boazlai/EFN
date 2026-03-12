@@ -1,7 +1,7 @@
 using System.Collections;
 using UnityEngine;
 
-public class Door : MonoBehaviour
+public class Door : MonoBehaviour, IInteractable
 {
     [Header("Door Settings")]
     [SerializeField] private float openAngle = 90f;

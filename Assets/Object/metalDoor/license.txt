@@ -1,0 +1,11 @@
+Model Information:
+* title:	Metal Door 2
+* source:	https://sketchfab.com/3d-models/metal-door-2-4da6b538427244aaababe36d3e228a40
+* author:	tboiston (https://sketchfab.com/tboiston)
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "Metal Door 2" (https://sketchfab.com/3d-models/metal-door-2-4da6b538427244aaababe36d3e228a40) by tboiston (https://sketchfab.com/tboiston) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)

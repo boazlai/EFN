@@ -22,25 +22,26 @@ public class DoorInteraction : MonoBehaviour
 
     private void Update()
     {
-        Door door = GetDoorInSight();
+        IInteractable interactable = GetInteractableInSight();
 
         // Show / hide prompt
         if (promptText != null)
         {
-            bool show = door != null;
+            string prompt = interactable?.GetPrompt();
+            bool show = !string.IsNullOrEmpty(prompt);
             if (promptText.gameObject.activeSelf != show)
                 promptText.gameObject.SetActive(show);
 
             if (show)
-                promptText.text = door.GetPrompt();
+                promptText.text = prompt;
         }
 
         // Interact on E
-        if (door != null && Input.GetKeyDown(KeyCode.E))
-            door.Interact();
+        if (interactable != null && Input.GetKeyDown(KeyCode.E))
+            interactable.Interact();
     }
 
-    private Door GetDoorInSight()
+    private IInteractable GetInteractableInSight()
     {
         Ray ray = new Ray(_cam.transform.position, _cam.transform.forward);
 
@@ -49,9 +50,10 @@ public class DoorInteraction : MonoBehaviour
 
         if (Physics.Raycast(ray, out RaycastHit hit, interactRange, mask, QueryTriggerInteraction.Ignore))
         {
-            Door found = hit.collider.GetComponentInParent<Door>();
+            IInteractable found = hit.collider.GetComponentInParent<IInteractable>();
             // Skip doors whose unlock minigame is still in progress — that script handles them
-            var minigame = found != null ? found.GetComponent<DoorUnlockMinigame>() : null;
+            var mb = found as MonoBehaviour;
+            var minigame = mb != null ? mb.GetComponent<DoorUnlockMinigame>() : null;
             if (minigame != null && !minigame.IsCompleted)
                 return null;
             return found;
