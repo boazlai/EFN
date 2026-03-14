@@ -6,8 +6,14 @@ public class Door : MonoBehaviour, IInteractable
     [Header("Door Settings")]
     [SerializeField] private float openAngle = 90f;
     [SerializeField] private float openSpeed = 3f;
+    [SerializeField] private bool openAwayFromInteractor = true;
+    [SerializeField] private bool invertAwayDirection;
     [SerializeField] private string openPrompt = "Press [E] to open";
     [SerializeField] private string closePrompt = "Press [E] to close";
+
+    [Header("Jeffery Override")]
+    [SerializeField] private float jefferyOpenSpeed = 4.5f;
+    [SerializeField] private AudioClip jefferyOpenSound;
 
     [Header("Lock Settings")]
     [SerializeField] private bool isLocked;
@@ -27,13 +33,18 @@ public class Door : MonoBehaviour, IInteractable
     [SerializeField] private AudioSource audioSource;
 
     private Quaternion _closedRotation;
-    private Quaternion _openRotation;
+    private Quaternion _targetRotation;
     private bool _isOpen = false;
+    private float _currentMoveSpeed;
+
+    public bool IsOpen => _isOpen;
+    public bool IsLocked => isLocked;
 
     private void Start()
     {
         _closedRotation = transform.rotation;
-        _openRotation = Quaternion.Euler(transform.eulerAngles + new Vector3(0, openAngle, 0));
+        _targetRotation = _closedRotation;
+        _currentMoveSpeed = openSpeed;
 
         // Auto-add an AudioSource if none is assigned
         if (audioSource == null)
@@ -42,11 +53,15 @@ public class Door : MonoBehaviour, IInteractable
 
     private void Update()
     {
-        Quaternion target = _isOpen ? _openRotation : _closedRotation;
-        transform.rotation = Quaternion.Slerp(transform.rotation, target, Time.deltaTime * openSpeed);
+        transform.rotation = Quaternion.Slerp(transform.rotation, _targetRotation, Time.deltaTime * _currentMoveSpeed);
     }
 
     public void Interact()
+    {
+        InteractFrom(null, false);
+    }
+
+    public void InteractFrom(Transform opener, bool openedByJeffery)
     {
         if (isLocked)
         {
@@ -56,9 +71,20 @@ public class Door : MonoBehaviour, IInteractable
             return;
         }
 
-        _isOpen = !_isOpen;
+        if (_isOpen)
+        {
+            _isOpen = false;
+            _targetRotation = _closedRotation;
+            _currentMoveSpeed = openSpeed;
+            PlayClip(closeSound);
+            return;
+        }
 
-        PlayClip(_isOpen ? openSound : closeSound);
+        _isOpen = true;
+        _targetRotation = GetOpenRotation(opener);
+        _currentMoveSpeed = openedByJeffery ? Mathf.Max(0.01f, jefferyOpenSpeed) : openSpeed;
+
+        PlayClip(openedByJeffery && jefferyOpenSound != null ? jefferyOpenSound : openSound);
     }
 
     public string GetPrompt()
@@ -72,6 +98,24 @@ public class Door : MonoBehaviour, IInteractable
     public void SetLocked(bool locked)
     {
         isLocked = locked;
+    }
+
+    private Quaternion GetOpenRotation(Transform opener)
+    {
+        float signedAngle = openAngle;
+
+        if (openAwayFromInteractor && opener != null)
+        {
+            Vector3 openerLocalPosition = transform.InverseTransformPoint(opener.position);
+            float directionSign = openerLocalPosition.z >= 0f ? -1f : 1f;
+
+            if (invertAwayDirection)
+                directionSign *= -1f;
+
+            signedAngle *= directionSign;
+        }
+
+        return Quaternion.Euler(_closedRotation.eulerAngles + new Vector3(0f, signedAngle, 0f));
     }
 
     private void PlayClip(AudioClip clip)

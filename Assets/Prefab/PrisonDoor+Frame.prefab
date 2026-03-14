@@ -47,8 +47,12 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   openAngle: 90
   openSpeed: 3
+  openAwayFromInteractor: 1
+  invertAwayDirection: 0
   openPrompt: Press [E] to open
   closePrompt: Press [E] to close
+  jefferyOpenSpeed: 10
+  jefferyOpenSound: {fileID: 8300000, guid: 54fc549789798da48b6cf36aad830d07, type: 3}
   isLocked: 0
   lockedPrompt: Door is locked
   shakeAngle: 1

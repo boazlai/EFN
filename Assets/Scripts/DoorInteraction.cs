@@ -38,7 +38,12 @@ public class DoorInteraction : MonoBehaviour
 
         // Interact on E
         if (interactable != null && Input.GetKeyDown(KeyCode.E))
-            interactable.Interact();
+        {
+            if (interactable is Door door)
+                door.InteractFrom(transform, false);
+            else
+                interactable.Interact();
+        }
     }
 
     private IInteractable GetInteractableInSight()
